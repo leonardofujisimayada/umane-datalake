@@ -1,0 +1,60 @@
+# Pasta com arquivos 
+dados/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Environment variables
+*.env
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# pyenv
+.python-version
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
+
+# MyPy
+.mypy_cache/
+
+# Data files (optional)
+data/
+*.csv
+*.parquet
+*.xlsx
+
+# AWS credentials or secrets (optional)
+*.pem
