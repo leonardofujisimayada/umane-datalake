@@ -1,37 +1,37 @@
+# =============
+# BIBLIOTECAS =
+# =============
+
 import json
 import os
 from datetime import datetime
 
-def salvar_json(json_data, pasta_destino, nome_arquivo=None):
+# ===================================
+# FUNCTION PARA SALVAR ARQUIVO JSON =
+# ===================================
+
+def salvar_json(data, base_path, filename):
     """
-    Salva um JSON em um arquivo .json dentro da pasta informada.
+    Salva um arquivo JSON diretamente na pasta base,
+    adicionando a data do dia no próprio nome do arquivo.
 
-    Param:
-        json_data (dict): JSON a ser salvo.
-        pasta_destino (str): caminho da pasta onde o arquivo deve ser salvo.
-        nome_arquivo (str): opcional. 
-
-    Retorno:
-        str: caminho completo do arquivo salvo.
+    Exemplo final:
+        base_path/monday_raw_2025-02-10_153210.json
     """
 
-    # Criar pasta
-    os.makedirs(pasta_destino, exist_ok=True)
+    # Adiciona data ao nome do arquivo (opcional — deixe assim se quiser)
+    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    filename_com_data = f"{data_hoje}_{filename}"
 
-    # Se o nome estiver ausente, cria automaticamente
-    if nome_arquivo is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nome_arquivo = f"arquivo_{timestamp}.json"
-
-    # Garantir que termina com .json
-    if not nome_arquivo.endswith(".json"):
-        nome_arquivo += ".json"
+    # Garante que a pasta exista
+    os.makedirs(base_path, exist_ok=True)
 
     # Caminho final do arquivo
-    caminho_completo = os.path.join(pasta_destino, nome_arquivo)
+    full_path = os.path.join(base_path, filename_com_data)
 
-    # Salvar o JSON
-    with open(caminho_completo, "w", encoding="utf-8") as f:
-        json.dump(json_data, f, ensure_ascii=False, indent=4)
+    # Salva o JSON
+    with open(full_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-    return caminho_completo
+    print(f"✔ JSON salvo em: {full_path}")
+    return full_path
