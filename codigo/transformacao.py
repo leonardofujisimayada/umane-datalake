@@ -5,6 +5,7 @@
 import os
 import json
 import pandas as pd
+import re
 
 # ---------------------------------------------------
 # FUNCTION PARA CONVERTER ARQUIVO JSON EM DATAFRAME - 
@@ -12,22 +13,20 @@ import pandas as pd
 
 def json_para_dataframe(json_path: str) -> pd.DataFrame:
     """
-    Pega um JSON exportado da segunda API do Monday
-    e transforma em um DataFrame tabular.
+    Converte JSON exportado da API do Monday em um DataFrame tabular,
+    usando o título das colunas em vez do ID.
     """
 
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Estrutura: data -> boards -> items_page -> items
     boards = data.get("data", {}).get("boards", [])
-
     registros = []
 
     for board in boards:
         items = (
             board.get("items_page", {})
-                 .get("items", [])
+                .get("items", [])
         )
 
         for item in items:
@@ -37,10 +36,21 @@ def json_para_dataframe(json_path: str) -> pd.DataFrame:
                 "item_name": item.get("name")
             }
 
-            # Flatten nas column_values (ex.: status, texto etc.)
             for col in item.get("column_values", []):
-                col_id = col.get("id")
-                linha[col_id] = col.get("text") or col.get("value")
+                
+                title = (
+                    col.get("column", {}).get("title")
+                    or col.get("id")  # fallback
+                )
+                title = re.sub(r"\s+", "_", title.strip())
+
+                original_title = title
+                counter = 1
+                while title in linha:
+                    title = f"{original_title}_{counter}"
+                    counter += 1
+
+                linha[title] = col.get("text") or col.get("value")
 
             registros.append(linha)
 
