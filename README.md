@@ -7,6 +7,7 @@ O objetivo é criar um fluxo simples, reprodutível e automatizado para consolid
 
 ## 📂 Estrutura do Projeto
 
+```tree
 umane-datalake/
 │── codigo/ # Scripts Python do pipeline
 │ ├── config.py # Configurações, variáveis ambiente, caminhos
@@ -20,4 +21,4 @@ umane-datalake/
 │
 │── .gitignore
 │── LICENSE
-
+---
