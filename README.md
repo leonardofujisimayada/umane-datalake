@@ -9,15 +9,15 @@ O objetivo é criar um fluxo simples, reprodutível e automatizado para consolid
 
 ```tree
 umane-datalake/
-│── codigo/ # Scripts Python do pipeline
-│ ├── config.py # Configurações, variáveis ambiente, caminhos
+│── codigo/      # Scripts Python do pipeline
+│ ├── config.py  # Configurações, variáveis ambiente, caminhos
 │ ├── funcoes.py # Funções auxiliares (ex: salvar JSON, criar parquet)
 │ └── ...
 │
 │── datalake/
-│ ├── bronze/ # Dados brutos (JSON)
-│ ├── prata/  # Dados tratados (parquet)
-│ └── ouro/   # (opcional - ainda não criado) 
+│ ├── bronze/    # Dados brutos (JSON)
+│ ├── prata/     # Dados tratados (parquet)
+│ └── ouro/      # (opcional - ainda não criado) 
 │
 │── .gitignore
 │── LICENSE
