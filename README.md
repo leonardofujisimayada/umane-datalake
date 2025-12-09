@@ -1,6 +1,6 @@
 # 🏛️ Umane — DataLake (Python)
 
-Pipeline de dados desenvolvido para ingestão, armazenamento e tratamento de informações provenientes da plataforma **Monday.com**, estruturadas em camadas de Data Lake (Bronze → Prata → Ouro). 
+Pipeline de dados desenvolvido para ingestão, armazenamento e tratamento de informações provenientes da plataforma **Monday.com**, estruturadas em camadas de Data Lake (Bronze → Prata → Ouro).<br>
 O objetivo é criar um fluxo simples, reprodutível e automatizado para consolidar dados brutos, tratá-los e disponibilizá-los para análises e dashboards.
 
 ---
@@ -21,4 +21,3 @@ umane-datalake/
 │
 │── .gitignore
 │── LICENSE
----
