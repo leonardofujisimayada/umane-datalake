@@ -45,9 +45,9 @@ query GetBoardItems{
 
 def run_pipeline():
 
-    # -----------------
-    # 1. Baixar dados - 
-    # -----------------
+    # ----------------
+    # 1. Baixa dados - 
+    # ----------------
     print("➡ Obtendo dados do Monday...")
     data = busca_dados_monday(query_funil_originacao)
 
@@ -62,9 +62,9 @@ def run_pipeline():
     print("➡ Salvando JSON bruto (camada bronze)...")
     salvar_json(data, PATH_BRONZE, json_filename)
 
-    # --------------------------------------
-    # 2. Transformar de bronze para silver -
-    # --------------------------------------
+    # --------------------------------------------------
+    # 2. Transforma dados da camada bronze para silver -
+    # --------------------------------------------------
     print("➡ Iniciando tratamento (bronze → silver)...")
     transformar_bronze_para_silver(PATH_BRONZE, PATH_SILVER)
 
