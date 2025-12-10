@@ -4,19 +4,24 @@
 
 import os
 from datetime import datetime
+
 from s3_client import salvar_json_s3, salvar_parquet_s3
 from monday_client import busca_dados_monday
-from transformacao import transformar_bronze_para_silver_s3, json_para_dataframe
+from transformacao import transformar_bronze_para_silver_s3
+from transformacao_ouro import criar_camada_ouro  
 
-# ======================================
-# CONFIGURAÇÕES DO DATA LAKE NA AWS S3 =
-# ======================================
+# ==========================
+# CONFIGURAÇÃO DO DATALAKE =
+# ==========================
 
 BUCKET_BRONZE = "umane-datalake-bronze"
 BUCKET_PRATA  = "umane-datalake-prata"
+BUCKET_OURO   = "umane-datalake-ouro"        
 
 PREFIX_BRONZE = "monday/funil_originacao"
 PREFIX_PRATA  = "monday/funil_originacao"
+PREFIX_OURO   = "monday/funil_originacao"     
+
 
 # ====================
 # PIPELINE PRINCIPAL =
@@ -99,6 +104,39 @@ def run_pipeline():
         raise e
 
     print(f"✔ Silver salvo com sucesso: {caminho_silver}")
+
+    # ----------------------------------
+    # 3. TRANSFORMAÇÃO — Silver → Gold -
+    # ----------------------------------
+
+    print("➡ Iniciando transformação (silver → gold)...")
+
+    try:
+        df_gold = criar_camada_ouro(df_silver)
+    except Exception as e:
+        print("❌ ERRO na criação da camada ouro:")
+        raise e
+
+    print("✔ Dados prontos para consumo final (gold).")
+
+    # ---------------------------------
+    # 3.1 SALVAR GOLD NO S3 (PARQUET) -
+    # ---------------------------------
+
+    gold_filename = "monday_gold.parquet"
+
+    try:
+        caminho_gold = salvar_parquet_s3(
+            df=df_gold,
+            bucket=BUCKET_OURO,
+            prefix=PREFIX_OURO,
+            filename=gold_filename
+        )
+    except Exception as e:
+        print("❌ ERRO ao salvar parquet na camada ouro:")
+        raise e
+
+    print(f"✔ Gold salvo com sucesso: {caminho_gold}")
 
     print("=======================================")
     print("     🎉 PIPELINE EXECUTADO SEM ERROS    ")
