@@ -3,35 +3,79 @@
 # =============
 
 import json
-import os
 from datetime import datetime
+import boto3
+import pyarrow as pa
+import pyarrow.parquet as pq
+import io
 
-# ===================================
-# FUNCTION PARA SALVAR ARQUIVO JSON =
-# ===================================
+# =========================================
+# FUNCTION PARA SALVAR ARQUIVO JSON NO S3 =
+# =========================================
 
-def salvar_json(data, base_path, filename):
+def salvar_json_s3(data, bucket, prefix, filename):
     """
-    Salva um arquivo JSON diretamente na pasta base,
-    adicionando a data do dia no próprio nome do arquivo.
+    Salva JSON no S3 dentro da estrutura:
 
-    Exemplo final:
-        base_path/monday_raw_2025-02-10_153210.json
+        s3://bucket/prefix/YYYYMM/timestamp_filename.json
+
+    Exemplo:
+        s3://umane-datalake-bronze/monday/funil_originacao/202512/20251209_153210_raw.json
     """
 
-    # Adiciona data ao nome do arquivo (opcional — deixe assim se quiser)
-    data_hoje = datetime.now().strftime("%Y-%m-%d")
-    filename_com_data = f"{data_hoje}_{filename}"
+    s3 = boto3.client("s3")
 
-    # Garante que a pasta exista
-    os.makedirs(base_path, exist_ok=True)
+    # Cria pasta no formato YYYYMM
+    ano_mes = datetime.now().strftime("%Y%m")
 
-    # Caminho final do arquivo
-    full_path = os.path.join(base_path, filename_com_data)
+    # Usa timestamp para evitar sobrescrita
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Salva o JSON
-    with open(full_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    filename_final = f"{timestamp}_{filename}"
 
-    print(f"✔ JSON salvo em: {full_path}")
-    return full_path
+    # Caminho final no S3 (não precisa existir previamente!)
+    # S3 cria automaticamente o prefixo
+    s3_key = f"{prefix}/{ano_mes}/{filename_final}"
+
+    s3.put_object(
+        Bucket=bucket,
+        Key=s3_key,
+        Body=json.dumps(data, indent=2, ensure_ascii=False),
+        ContentType="application/json"
+    )
+
+    caminho_final = f"s3://{bucket}/{s3_key}"
+    print(f"✔ JSON salvo no S3 em:\n{caminho_final}")
+
+    return caminho_final
+
+# ============================================
+# FUNCTION PARA SALVAR ARQUIVO PARQUET NO S3 =
+# ============================================
+
+def salvar_parquet_s3(df, bucket, prefix, filename):
+
+    s3 = boto3.client("s3")
+
+    ano_mes = datetime.now().strftime("%Y%m")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    filename_final = f"{timestamp}_{filename}"
+    s3_key = f"{prefix}/{ano_mes}/{filename_final}"
+
+    # Converter para Parquet em memória
+    table = pa.Table.from_pandas(df)
+    buffer = io.BytesIO()
+    pq.write_table(table, buffer)
+
+    s3.put_object(
+        Bucket=bucket,
+        Key=s3_key,
+        Body=buffer.getvalue(),
+        ContentType="application/octet-stream"
+    )
+
+    caminho = f"s3://{bucket}/{s3_key}"
+    print(f"✔ Parquet salvo no S3: {caminho}")
+
+    return caminho

@@ -5,17 +5,17 @@
 import requests
 import json
 import os
-from config import MONDAY_API_KEY, MONDAY_ENDPOINT
+from config import MONDAY_API_TOKEN, MONDAY_ENDPOINT
 
 # ==========================
 # CONFIGURAÇÕES DO CLIENTE =
 # ==========================
 
-if not MONDAY_API_KEY:
-    raise EnvironmentError("A variável de ambiente MONDAY_API_KEY não está definida.")
+if not MONDAY_API_TOKEN:
+    raise EnvironmentError("A variável de ambiente MONDAY_API_TOKEN não está definida.")
 
 HEADERS = {
-    "Authorization": MONDAY_API_KEY,
+    "Authorization": MONDAY_API_TOKEN,
     "Content-Type": "application/json"
 }
 

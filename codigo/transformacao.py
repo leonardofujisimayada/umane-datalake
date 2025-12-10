@@ -8,65 +8,94 @@ import pandas as pd
 import re
 from glob import glob
 from datetime import datetime
+from io import BytesIO
+import boto3
 
 
 # =================================================================
 # 1. Função principal: transforma todos os JSONs da camada bronze =
 # =================================================================
 
-def transformar_bronze_para_silver(path_bronze: str, path_silver: str):
+def transformar_bronze_para_silver_s3(bucket_bronze: str, prefix_bronze: str):
+    """
+    Lê todos os arquivos JSON da camada bronze no S3,
+    converte para DataFrame e retorna um único DataFrame consolidado.
 
-    # Criar pasta silver se não existir
-    os.makedirs(path_silver, exist_ok=True)
+    Exemplo de prefix:
+        monday/funil_originacao
+    """
 
-    # Lista todos os arquivos .json da bronze
-    arquivos = glob(os.path.join(path_bronze, "*.json"))
+    s3 = boto3.client("s3")
+
+    # ------------------------------
+    # 1. LISTAR ARQUIVOS DO BRONZE -
+    # ------------------------------
+
+    # Pega o ano e mês atual (pasta corrente)
+    ano_mes = datetime.now().strftime("%Y%m")
+
+    prefix_completo = f"{prefix_bronze}/{ano_mes}/"
+    print(f"➡ Procurando arquivos em: s3://{bucket_bronze}/{prefix_completo}")
+
+    response = s3.list_objects_v2(
+        Bucket=bucket_bronze,
+        Prefix=prefix_completo
+    )
+
+    if "Contents" not in response:
+        raise ValueError("Nenhum arquivo JSON encontrado na camada bronze do S3.")
+
+    # Filtra somente .json
+    arquivos = [
+        obj["Key"]
+        for obj in response["Contents"]
+        if obj["Key"].endswith(".json")
+    ]
 
     if not arquivos:
-        raise ValueError("Nenhum arquivo JSON encontrado na camada bronze.")
+        raise ValueError("Nenhum arquivo JSON encontrado na pasta bronze correspondente.")
 
-    print(f"➡ {len(arquivos)} arquivos encontrados na camada bronze.")
+    print(f"➡ {len(arquivos)} arquivos encontrados na camada bronze do S3.")
 
-    # Lista para acumular DataFrames
+    # ----------------------------
+    # 2. PROCESSAR ARQUIVOS JSON -
+    # ----------------------------
+
     dfs = []
 
-    for json_file in arquivos:
-        print(f"➡ Processando arquivo: {json_file}")
-        df = json_para_dataframe(json_file)
+    for key in arquivos:
+        print(f"➡ Processando arquivo: s3://{bucket_bronze}/{key}")
+
+        obj = s3.get_object(Bucket=bucket_bronze, Key=key)
+
+        json_bytes = obj["Body"].read()
+        json_data = json.loads(json_bytes.decode("utf-8"))
+
+        # Usa sua função atual para transformar JSON → DataFrame
+        df = json_para_dataframe(json_data)
         dfs.append(df)
 
-    # Concatena todos os dataframes em um único silver
+    # -------------------------------
+    # 3. CONCATENAR EM UM ÚNICO DF
+    # -------------------------------
     df_final = pd.concat(dfs, ignore_index=True)
 
-    # ----------------------------------------
-    # Gera nome com timestamp (igual Bronze) -
-    # ----------------------------------------
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    silver_filename = f"monday_items_{timestamp}.parquet"
-    parquet_path = os.path.join(path_silver, silver_filename)
+    print(f"✔ {len(df_final)} linhas totais consolidadas na camada silver.")
 
-    print(f"➡ Salvando camada silver em Parquet: {parquet_path}")
-    df_final.to_parquet(parquet_path, index=False)
-
-    print("✔ Transformação bronze → silver concluída.")
-
+    return df_final
 
 # =============================================================
 # 2. Detecta o tipo de JSON (lista de itens ou JSON completo) =
 # =============================================================
 
-def json_para_dataframe(json_path: str) -> pd.DataFrame:
+def json_para_dataframe(data) -> pd.DataFrame:
     """
-    Detecta automaticamente se o arquivo JSON é:
-    - lista de itens (bronze atual)
+    Detecta automaticamente se 'data' é:
+    - lista de itens (JSON já carregado)
     - resposta bruta da API Monday
-    E roteia para a função correta.
     """
 
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Caso 1 → Bronze atual (lista de itens)
+    # Caso 1 → Bronze (lista)
     if isinstance(data, list):
         print("✔ Formato detectado: lista de itens (bronze).")
         return json_para_dataframe_lista(data)
@@ -137,9 +166,15 @@ def process_item(item: dict) -> dict:
         display = col.get("display_value")
 
         # Caso especial: mirror
-        if col_type == "mirror" and display:
-            valores = [v.strip() for v in display.split(",")]
-            linha[title] = " | ".join(valores)
+        if col_type == "mirror":
+            if display:
+                valores = [v.strip() for v in display.split(",")]
+                linha[title] = " | ".join(valores)
+            elif value and isinstance(value, dict) and "linkedPulseIds" in value:
+                ids = [str(v.get("linkedPulseId")) for v in value["linkedPulseIds"]]
+                linha[title] = " | ".join(ids)
+            else:
+                linha[title] = None
             continue
 
         # Valor padrão
