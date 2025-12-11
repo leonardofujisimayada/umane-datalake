@@ -2,7 +2,7 @@ name: Execução diária do pipeline Umane
 
 on:
   schedule:
-    - cron: "0 9 * * *"   # 06:00 no Brasil (UTC-3)
+    - cron: "0 9 * * *"   # Roda às 06:00 no Brasil (UTC-3)
   workflow_dispatch:
 
 jobs:
@@ -29,7 +29,11 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: "us-east-1"
         run: |
+          # Adicionar diretório src ao PYTHONPATH
+          export PYTHONPATH="$PYTHONPATH:src"
+          
+          # Executar pipeline
           python - <<EOF
-          from umane_datalake.pipeline import run_pipeline
-          run_pipeline()
-          EOF
+from umane_datalake.pipeline import run_pipeline
+run_pipeline()
+EOF
