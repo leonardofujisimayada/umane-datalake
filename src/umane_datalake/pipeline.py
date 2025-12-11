@@ -5,10 +5,10 @@
 import os
 from datetime import datetime
 
-from s3_client import salvar_json_s3, salvar_parquet_s3
-from monday_client import busca_dados_monday
-from transformacao import transformar_bronze_para_silver_s3
-from transformacao_ouro import criar_camada_ouro  
+from umane_datalake.s3_client import salvar_json_s3, salvar_parquet_s3
+from umane_datalake.monday_client import busca_dados_monday
+from umane_datalake.transformacao import transformar_bronze_para_silver_s3
+from umane_datalake.transformacao_ouro import criar_camada_ouro  
 
 # ==========================
 # CONFIGURAÇÃO DO DATALAKE =

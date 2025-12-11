@@ -68,15 +68,26 @@ def transformar_bronze_para_silver_s3(bucket_bronze: str, prefix_bronze: str,
     # -----------------------
 
     def extrair_stamp_bronze(key):
-        # monday_raw_20251209_180427.json
-        return key.split("monday_raw_")[1].replace(".json", "")
+        nome = key.split("/")[-1]  # pega apenas o nome do arquivo
+        if nome.startswith("monday_raw_") and nome.endswith(".json"):
+            return nome.replace("monday_raw_", "").replace(".json", "")
+        return None
 
     def extrair_stamp_silver(key):
-        # monday_items_20251209_180427.parquet
-        return key.split("monday_items_")[1].replace(".parquet", "")
+        nome = key.split("/")[-1]  # pega só o nome do arquivo
+        if nome.startswith("monday_items_") and nome.endswith(".parquet"):
+            return nome.replace("monday_items_", "").replace(".parquet", "")
+        return None
 
-    bronze_stamps = {extrair_stamp_bronze(k) for k in bronze_files}
-    silver_stamps = {extrair_stamp_silver(k) for k in silver_files}
+    bronze_stamps = {
+        stamp for stamp in (extrair_stamp_bronze(k) for k in bronze_files)
+        if stamp is not None
+    }
+
+    silver_stamps = {
+        stamp for stamp in (extrair_stamp_silver(k) for k in silver_files)
+        if stamp is not None
+    }
 
     # -------------------
     # 3. ARQUIVOS NOVOS - 

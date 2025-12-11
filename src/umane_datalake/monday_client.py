@@ -5,7 +5,7 @@
 import requests
 import json
 import os
-from config import MONDAY_API_TOKEN, MONDAY_ENDPOINT
+from umane_datalake.config import MONDAY_API_TOKEN, MONDAY_ENDPOINT
 
 # ==========================
 # CONFIGURAÇÕES DO CLIENTE =
