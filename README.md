@@ -1,120 +1,178 @@
-# 📦 Umane DataLake — Pipeline Monday → S3
+# Umane Data Lake — Monday Pipeline — Arquitetura Completa
 
-Pipeline leve e automatizado para ingestão e transformação de dados da plataforma **Monday.com**, organizado em camadas de Data Lake: **Bronze → Prata → Ouro**, armazenadas na AWS S3.
+## 🚀 Introdução
 
----
-
-## 🚀 Visão Geral
-
-Este projeto executa:
-
-1. **Extração** dos itens de um board Monday via API GraphQL  
-2. **Armazenamento bruto** na camada **bronze** (JSON versionado por timestamp)  
-3. **Transformação incremental** para a camada **prata** (Parquet estruturado)  
-4. **Modelagem analítica** para a camada **ouro** (dataset limpo e pronto para BI)
+O projeto **Umane Data Lake** foi desenvolvido para criar um pipeline robusto, automatizado e escalável, responsável por coletar dados da plataforma **Monday.com**, organizá-los em camadas de um Data Lake moderno (**Bronze, Silver e Gold**) e disponibilizá-los para análises e uso estratégico.
 
 ---
 
-## 🌐 Arquitetura do Pipeline (Diagrama Mermaid)
+# 🏛 Visão Geral da Arquitetura
+
+```
+Monday API → Bronze → Silver → Gold → BI/Analytics
+```
+
+## 🔍 Diagrama Geral do Pipeline
 
 ```mermaid
 flowchart TD
-    A[Monday API] --> B[Camada Bronze<br>JSON bruto]
-    B --> C[Camada Prata<br>Parquet normalizado]
-    C --> D[Camada Ouro<br>Dataset analítico]
-    D --> E[Consumo: BI / Analytics]
+
+A[GitHub Actions<br/>Workflow diário] --> B[run_pipeline()]
+B --> C[Extração Monday API<br/>GraphQL + paginação]
+C --> D[Salvar Bronze<br/>JSON no S3]
+D --> E[Transformação Bronze → Silver<br/>flatten + normalização]
+E --> F[Camada Silver<br/>Parquet no S3]
+F --> G[Transformação Silver → Gold<br/>curadoria]
+G --> H[Camada Gold<br/>Dataset analítico]
+
+style A fill:#2e83ff,stroke:#1c4b99,color:white
+style D fill:#ffcc66,stroke:#b8860b,color:#000
+style F fill:#b3e6ff,stroke:#006b99,color:#000
+style H fill:#00a86b,stroke:#006b43,color:#fff
 ```
 
 ---
 
-## 🧱 Arquitetura das Camadas
+# ⚙️ Orquestração — GitHub Actions
 
-### 🔹 Bronze — RAW  
-- JSON bruto retornado pela API Monday  
-- Particionado por `YYYYMM/`  
-- Nenhuma transformação aplicada  
+A pipeline executa diariamente às **06:00 (UTC−3)** utilizando GitHub Actions:
 
-### 🔸 Prata — Normalizada  
-- Registros tabulares gerados a partir do JSON  
-- Tratamento de colunas complexas (mirror, subtasks, relations)  
-- Apenas arquivos *novos* são processados (incremental)
+```yaml
+name: pipeline
 
-### 🟡 Ouro — Curada  
-- Padronização de nomes das colunas  
-- Criação de ID estável por item  
-- Conversões numéricas e somatórios  
-- Adequada para análises e dashboards
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * *"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run pipeline
+        env:
+          MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: "us-east-1"
+        run: |
+          export PYTHONPATH="$PYTHONPATH:src"
+          python -c "from umane_datalake.pipeline import run_pipeline; run_pipeline()"
+```
 
 ---
 
-## 📂 Estrutura dos Buckets S3
+# 🧩 Módulos Internos
 
-```
-s3://umane-datalake-bronze/monday/funil_originacao/YYYYMM/monday_raw_TIMESTAMP.json
-s3://umane-datalake-prata/monday/funil_originacao/YYYYMM/monday_items_TIMESTAMP.parquet
-s3://umane-datalake-ouro/monday/funil_originacao/YYYYMM/monday_gold_TIMESTAMP.parquet
+## monday_client.py
+Responsável por extrair dados da API Monday:
+
+- autenticação via token  
+- paginação cursor-based  
+- normalização de colunas complexas  
+
+```mermaid
+sequenceDiagram
+    participant A as GitHub Actions
+    participant P as run_pipeline()
+    participant M as Monday API
+    participant S as S3 Bronze
+
+    A->>P: Executar pipeline
+    P->>M: Query GraphQL
+    M-->>P: Items + cursor
+    P->>S: Salvar JSON bruto
 ```
 
 ---
 
-## 🔧 Instalação
+# 🥉 Camada Bronze
 
-Criar ambiente virtual:
+Os dados crus são salvos em JSON:
 
-```bash
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
+```
+s3://umane-datalake-bronze/.../monday_raw_timestamp.json
 ```
 
-Instalar dependências:
+---
+
+# 🥈 Camada Silver
+
+Conversão Bronze → Silver via `transformacao.py`:
+
+- flatten de colunas  
+- normalização  
+- transformação incremental  
+- saída em Parquet  
+
+```mermaid
+flowchart TD
+A[JSON Bronze] --> B[json_para_dataframe]
+B --> C[process_item]
+C --> D[concat]
+D --> E[Salvar Parquet Silver]
+```
+
+---
+
+# 🥇 Camada Gold
+
+Curadoria final via `transformacao_ouro.py`:
+
+- normalização snake_case  
+- uuid5 determinístico  
+- somatória de colunas compostas  
+- dataset pronto para BI  
+
+```mermaid
+flowchart TD
+A[Silver Parquet] --> B[normalização]
+B --> C[uuid5]
+C --> D[tratamento numérico]
+D --> E[Gold Parquet]
+```
+
+---
+
+# 🎯 Pipeline Principal — run_pipeline()
+
+```mermaid
+graph LR
+P[run_pipeline] --> M[busca_dados_monday]
+P --> S1[transformar Bronze->Silver]
+S1 --> S2[monday_items.parquet]
+P --> G[criar Gold]
+G --> O[gold.parquet]
+```
+
+---
+
+# ▶ Execução Local
 
 ```bash
 pip install -r requirements.txt
+export PYTHONPATH="$PYTHONPATH:src"
+export MONDAY_API_TOKEN="..."
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+python -c "from umane_datalake.pipeline import run_pipeline; run_pipeline()"
 ```
 
 ---
 
-## 🔐 Variáveis de Ambiente
+# 🔐 Secrets Necessários
 
-Crie um arquivo `.env`:
-
-```
-MONDAY_API_TOKEN=seu_token
-AWS_ACCESS_KEY_ID=xxxxx
-AWS_SECRET_ACCESS_KEY=yyyyy
-AWS_DEFAULT_REGION=us-east-1
-```
-
----
-
-## ▶️ Execução do Pipeline
-
-Execute:
-
-```bash
-python -m umane_datalake.pipeline
-```
-
-O pipeline realiza:
-
-- extração → bronze  
-- bronze novo → prata  
-- prata → ouro  
-- salvamento incremental no S3  
-
----
-
-## 🗂 Estrutura dos Módulos
-
-| Módulo | Função |
-|--------|--------|
-| `config.py` | Carregamento de variáveis de ambiente |
-| `monday_client.py` | Cliente GraphQL com paginação da API |
-| `s3_client.py` | Salvamento de JSON e Parquet no S3 |
-| `transformacao.py` | Bronze → Prata (incremental) |
-| `transformacao_ouro.py` | Prata → Ouro (modelagem final) |
-| `pipeline.py` | Orquestração completa do fluxo |
+| Nome | Descrição |
+|------|-----------|
+| MONDAY_API_TOKEN | Token da API Monday |
+| AWS_ACCESS_KEY_ID | Access key AWS |
+| AWS_SECRET_ACCESS_KEY | Secret key AWS |
+| AWS_DEFAULT_REGION | Região AWS |
 
 ---
 
