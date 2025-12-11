@@ -30,8 +30,5 @@ jobs:
           AWS_DEFAULT_REGION: "us-east-1"
         run: |
           export PYTHONPATH="$PYTHONPATH:src"
-          python - << 'EOF'
-from umane_datalake.pipeline import run_pipeline
-run_pipeline()
-EOF
+          python -c "from umane_datalake.pipeline import run_pipeline; run_pipeline()"
 
