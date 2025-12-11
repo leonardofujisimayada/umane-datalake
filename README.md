@@ -17,7 +17,7 @@ umane-datalake/
 │── datalake/
 │ ├── bronze/    # Dados brutos (JSON)
 │ ├── prata/     # Dados tratados (parquet)
-│ └── ouro/      # (opcional - ainda não criado) 
+│ └── ouro/      # Dados para consumo (parquet)
 │
 │── .gitignore
 │── LICENSE
