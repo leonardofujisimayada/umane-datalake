@@ -1,6 +1,13 @@
-# =============
-# BIBLIOTECAS =
-# =============
+"""
+Pipeline principal do Data Lake Monday → AWS S3.
+
+Este módulo orquestra todo o fluxo:
+1. Extração dos dados brutos via API Monday
+2. Armazenamento em Bronze (JSON)
+3. Transformação incremental Bronze → Prata (Parquet)
+4. Transformação Prata → Ouro (dataset curado)
+5. Armazenamento final em Parquet no S3
+"""
 
 import os
 from datetime import datetime
@@ -8,86 +15,59 @@ from datetime import datetime
 from umane_datalake.s3_client import salvar_json_s3, salvar_parquet_s3
 from umane_datalake.monday_client import busca_dados_monday
 from umane_datalake.transformacao import transformar_bronze_para_silver_s3
-from umane_datalake.transformacao_ouro import criar_camada_ouro  
+from umane_datalake.transformacao_ouro import criar_camada_ouro
 
-# ==========================
-# CONFIGURAÇÃO DO DATALAKE =
-# ==========================
 
+# Configurações dos buckets
 BUCKET_BRONZE = "umane-datalake-bronze"
-BUCKET_PRATA  = "umane-datalake-prata"
-BUCKET_OURO   = "umane-datalake-ouro"        
+BUCKET_PRATA = "umane-datalake-prata"
+BUCKET_OURO = "umane-datalake-ouro"
 
-PREFIX_BRONZE = "monday/funil_originacao"
-PREFIX_PRATA  = "monday/funil_originacao"
-PREFIX_OURO   = "monday/funil_originacao"     
+PREFIX_BRONZE = PREFIX_PRATA = PREFIX_OURO = "monday/funil_originacao"
 
-
-# ====================
-# PIPELINE PRINCIPAL =
-# ====================
 
 def run_pipeline():
+    """
+    Executa o pipeline completo Monday → Bronze → Prata → Ouro.
+
+    Etapas:
+        1. Extrai dados do board Monday.
+        2. Salva JSON bruto na camada Bronze.
+        3. Converte incrementos Bronze → Prata.
+        4. Gera dataset Ouro a partir dos novos dados Prata.
+        5. Salva Parquet final no S3.
+
+    Raises:
+        Exception: Propaga erros de qualquer etapa para depuração rápida.
+    """
 
     print("=================================")
     print("      🚀 INICIANDO PIPELINE      ")
     print("=================================")
 
-    # -------------------------------
-    # CONFIGURAÇÕES DO BOARD MONDAY -
-    # -------------------------------
     board_id = 9718729717
     print(f"➡ Extraindo dados do board {board_id}...")
 
-    # -------------------------------------------------
-    # 1. EXTRAÇÃO — buscando todos os itens da Monday -
-    # -------------------------------------------------
-
-    try:
-        items = busca_dados_monday(board_id=board_id)
-    except Exception as e:
-        print("❌ ERRO durante a extração dos dados da Monday:")
-        raise e
-
+    # 1. EXTRAÇÃO
+    items = busca_dados_monday(board_id=board_id)
     print("✔ Dados extraídos com sucesso.")
 
-    # ---------------------------------------------
-    # 1.1 SALVAR BRONZE NO S3 COM TIMESTAMP ÚNICO -
-    # ---------------------------------------------
+    # 2. SALVAR BRONZE
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     bronze_filename = f"monday_raw_{timestamp}.json"
 
-    print("➡ Salvando JSON bruto na camada bronze S3...")
-
-    try:
-        caminho_bronze = salvar_json_s3(
-            data=items,
-            bucket=BUCKET_BRONZE,
-            prefix=PREFIX_BRONZE,
-            filename=bronze_filename
-        )
-    except Exception as e:
-        print("❌ ERRO ao salvar JSON na camada bronze:")
-        raise e
-
+    caminho_bronze = salvar_json_s3(
+        data=items, bucket=BUCKET_BRONZE, prefix=PREFIX_BRONZE, filename=bronze_filename
+    )
     print(f"✔ Arquivo salvo na camada bronze: {caminho_bronze}")
 
-    # ------------------------------------------------
-    # 2. TRANSFORMAÇÃO INCREMENTAL — BRONZE → SILVER -
-    # ------------------------------------------------
-
-    print("➡ Iniciando transformação incremental (bronze → silver)...")
-
-    try:
-        df_silver_novos = transformar_bronze_para_silver_s3(
-            bucket_bronze=BUCKET_BRONZE,
-            prefix_bronze=PREFIX_BRONZE,
-            bucket_silver=BUCKET_PRATA,
-            prefix_silver=PREFIX_PRATA
-        )
-    except Exception as e:
-        print("❌ ERRO durante a transformação bronze → silver:")
-        raise e
+    # 3. BRONZE → PRATA (incremental)
+    df_silver_novos = transformar_bronze_para_silver_s3(
+        bucket_bronze=BUCKET_BRONZE,
+        prefix_bronze=PREFIX_BRONZE,
+        bucket_silver=BUCKET_PRATA,
+        prefix_silver=PREFIX_PRATA,
+    )
 
     if df_silver_novos is None:
         print("✔ Nenhum novo dado silver gerado. Encerrando pipeline.")
@@ -95,47 +75,22 @@ def run_pipeline():
 
     print("✔ Novos dados silver gerados.")
 
-    # ----------------------------------------------
-    # 3. TRANSFORMAÇÃO INCREMENTAL — SILVER → GOLD -
-    # ----------------------------------------------
-
-    print("➡ Iniciando transformação incremental (silver → gold)...")
-
-    try:
-        df_gold = criar_camada_ouro(df_silver_novos)
-    except Exception as e:
-        print("❌ ERRO na criação da camada ouro:")
-        raise e
-
+    # 4. PRATA → OURO
+    df_gold = criar_camada_ouro(df_silver_novos)
     print("✔ Dados gold gerados.")
 
-    # -----------------------------------------------
-    # 3.1 SALVAR GOLD NO S3 (PARQUET COM TIMESTAMP) -
-    # -----------------------------------------------
+    # 5. Salvar ouro
     gold_filename = f"monday_gold_{timestamp}.parquet"
-
-    try:
-        caminho_gold = salvar_parquet_s3(
-            df=df_gold,
-            bucket=BUCKET_OURO,
-            prefix=PREFIX_OURO,
-            filename=gold_filename
-        )
-    except Exception as e:
-        print("❌ ERRO ao salvar parquet na camada ouro:")
-        raise e
+    caminho_gold = salvar_parquet_s3(
+        df=df_gold, bucket=BUCKET_OURO, prefix=PREFIX_OURO, filename=gold_filename
+    )
 
     print(f"✔ Gold salvo com sucesso: {caminho_gold}")
-
     print("=======================================")
     print("     🎉 PIPELINE EXECUTADO SEM ERROS    ")
     print("=======================================")
 
 
-
-# =================
-# EXECUÇÃO DIRETA =
-# =================
-
 if __name__ == "__main__":
     run_pipeline()
+

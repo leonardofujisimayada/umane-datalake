@@ -1,16 +1,23 @@
-# =============
-# BIBLIOTECAS =
-# =============
+"""
+Cliente oficial da API Monday.com para extração dos dados do board.
+
+Este módulo implementa:
+- Autenticação via token
+- Execução de queries GraphQL
+- Paginação automática via cursor
+- Tratamento de erros HTTP e GraphQL
+- Extração completa de itens de um board
+
+Função principal:
+    busca_dados_monday(board_id, limit)
+"""
 
 import requests
 import json
 import os
 from umane_datalake.config import MONDAY_API_TOKEN, MONDAY_ENDPOINT
 
-# ==========================
-# CONFIGURAÇÕES DO CLIENTE =
-# ==========================
-
+# Verificação de credenciais
 if not MONDAY_API_TOKEN:
     raise EnvironmentError("A variável de ambiente MONDAY_API_TOKEN não está definida.")
 
@@ -19,11 +26,7 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-
-# =============================
-# QUERY GRAPHQL COM PAGINAÇÃO =
-# =============================
-
+# Query GraphQL com paginação
 QUERY_ITEMS_PAGE = """
 query ($board_id: ID!, $limit: Int!, $cursor: String) {
   boards(ids: [$board_id]) {
@@ -40,20 +43,10 @@ query ($board_id: ID!, $limit: Int!, $cursor: String) {
           column {
             title
           }
-
-          # Fragmentos específicos que realmente possuem display_value
-          ... on MirrorValue {
-            display_value
-          }
-          ... on BoardRelationValue {
-            display_value
-          }
-          ... on DependencyValue {
-            display_value
-          }
-          ... on SubtasksValue {
-            display_value
-          }
+          ... on MirrorValue { display_value }
+          ... on BoardRelationValue { display_value }
+          ... on DependencyValue { display_value }
+          ... on SubtasksValue { display_value }
         }
       }
     }
@@ -62,73 +55,63 @@ query ($board_id: ID!, $limit: Int!, $cursor: String) {
 """
 
 
-# ==================================================
-# FUNÇÃO CENTRAL: BUSCA TODOS OS ITENS DE UM BOARD =
-# ==================================================
-
 def busca_dados_monday(board_id: int, limit: int = 500):
     """
-    Busca todos os itens de um board Monday usando paginação.
-    Retorna uma lista de itens no formato plano (pronto para Bronze).
+    Extrai todos os itens de um board Monday utilizando paginação automática.
+
+    Args:
+        board_id (int): ID numérico do board Monday.
+        limit (int): Quantidade máxima de itens por página da API.
+
+    Returns:
+        list: Lista de itens (dict) no formato bruto retornado pela API.
+
+    Raises:
+        RuntimeError: Erros de comunicação HTTP, falhas no GraphQL ou estrutura inesperada.
     """
-    
-    print(f"➡ Iniciando extração do board {board_id} ...")
 
     cursor = None
     all_items = []
     page_number = 1
 
+    print(f"➡ Iniciando extração do board {board_id} ...")
+
     while True:
         print(f"➡ Buscando página {page_number} (cursor: {cursor}) ...")
-
-        variables = {
-            "board_id": board_id,
-            "limit": limit,
-            "cursor": cursor
-        }
 
         response = requests.post(
             MONDAY_ENDPOINT,
             headers=HEADERS,
-            json={"query": QUERY_ITEMS_PAGE, "variables": variables}
+            json={"query": QUERY_ITEMS_PAGE, "variables": {"board_id": board_id, "limit": limit, "cursor": cursor}}
         )
 
-        # -----------------------------------------------------
-        # TRATA ERRO DE REQUEST HTTP (ex.: DNS, timeout, etc) -
-        # -----------------------------------------------------
+        # Tenta converter a resposta em JSON
         try:
             data = response.json()
         except Exception as e:
             raise RuntimeError(f"Erro ao converter resposta para JSON: {e}")
 
-        # --------------------
-        # TRATA ERRO GRAPHQL -
-        # --------------------
+        # Erros retornados pela API GraphQL
         if "errors" in data:
             raise RuntimeError(
                 f"Erro retornado pela API do Monday:\n{json.dumps(data['errors'], indent=2, ensure_ascii=False)}"
             )
 
-        # -------------------------
-        # TRATA RESPOSTA INVÁLIDA -
-        # -------------------------
+        # Estrutura inesperada
         if "data" not in data or not data["data"]["boards"]:
             raise RuntimeError(
                 f"Resposta inesperada da API. Conteúdo recebido:\n{json.dumps(data, indent=2, ensure_ascii=False)}"
             )
 
+        # Extrai itens
         page = data["data"]["boards"][0]["items_page"]
         items = page.get("items", [])
-
         print(f"   ✔ {len(items)} itens encontrados na página {page_number}")
 
-        # Adiciona página ao acumulador
         all_items.extend(items)
 
         # Atualiza cursor
         cursor = page.get("cursor")
-
-        # Se cursor é None → acabou a paginação
         if cursor is None:
             print("✔ Todas as páginas foram extraídas com sucesso.")
             break
@@ -139,11 +122,7 @@ def busca_dados_monday(board_id: int, limit: int = 500):
     return all_items
 
 
-# ==================================
-# DEBUG OPCIONAL (execução direta) =
-# ==================================
-
 if __name__ == "__main__":
-    # Para testes manuais:
     exemplo_board_id = 123456789
     itens = busca_dados_monday(exemplo_board_id)
+
