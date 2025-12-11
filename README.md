@@ -24,7 +24,7 @@ D --> E[Bronze para Silver - flatten + normalizacao]
 E --> F[Camada Silver - Parquet no S3]
 F --> G[Silver para Gold - curadoria]
 G --> H[Camada Gold - Dataset analitico]
-
+...
 style A fill:#2e83ff,stroke:#1c4b99,color:white
 style D fill:#ffcc66,stroke:#b8860b,color:#000
 style F fill:#b3e6ff,stroke:#006b99,color:#000
