@@ -1,28 +1,27 @@
-name: Execução diária do pipeline Umane
+name: pipeline
 
 on:
-  schedule:
-    - cron: "0 9 * * *"   # Roda às 06:00 no Brasil (UTC-3)
   workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * *"
 
 jobs:
-  run_pipeline:
+  run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do repositório
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Configurar Python
+      - name: Python setup
         uses: actions/setup-python@v4
         with:
           python-version: "3.12"
 
-      - name: Instalar dependências
-        run: |
-          pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-      - name: Executar pipeline
+      - name: Run pipeline
         env:
           MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -31,4 +30,3 @@ jobs:
         run: |
           export PYTHONPATH="$PYTHONPATH:src"
           python -c "from umane_datalake.pipeline import run_pipeline; run_pipeline()"
-
