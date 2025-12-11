@@ -2,7 +2,7 @@
 
 ## 🚀 Introdução
 
-O projeto **Umane Data Lake** foi desenvolvido para criar um pipeline robusto, automatizado e escalável, responsável por coletar dados da plataforma **Monday.com**, organizá-los em camadas de um Data Lake moderno (**Bronze, Silver e Gold**) e disponibilizá-los para análises e uso estratégico.
+O projeto **Umane Data Lake** foi desenvolvido para criar um pipeline automatizado e escalável, responsável por coletar dados da plataforma **Monday.com**, organizá-los em camadas de um Data Lake (**Bronze, Silver e Gold**) e disponibilizá-los para análises e uso estratégico.
 
 ---
 
@@ -17,19 +17,18 @@ Monday API → Bronze → Silver → Gold → BI/Analytics
 ```mermaid
 flowchart TD
 
-A[GitHub Actions<br/>Workflow diário] --> B[run_pipeline()]
-B --> C[Extração Monday API<br/>GraphQL + paginação]
-C --> D[Salvar Bronze<br/>JSON no S3]
-D --> E[Transformação Bronze → Silver<br/>flatten + normalização]
-E --> F[Camada Silver<br/>Parquet no S3]
-F --> G[Transformação Silver → Gold<br/>curadoria]
-G --> H[Camada Gold<br/>Dataset analítico]
+A[GitHub Actions - Workflow diario] --> B[run_pipeline]
+B --> C[Extracao Monday API - GraphQL + paginacao]
+C --> D[Camada Bronze - JSON no S3]
+D --> E[Bronze para Silver - flatten + normalizacao]
+E --> F[Camada Silver - Parquet no S3]
+F --> G[Silver para Gold - curadoria]
+G --> H[Camada Gold - Dataset analitico]
 
 style A fill:#2e83ff,stroke:#1c4b99,color:white
 style D fill:#ffcc66,stroke:#b8860b,color:#000
 style F fill:#b3e6ff,stroke:#006b99,color:#000
 style H fill:#00a86b,stroke:#006b43,color:#fff
-```
 
 ---
 
