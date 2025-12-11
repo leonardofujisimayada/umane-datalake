@@ -15,27 +15,20 @@ import io
 
 def salvar_json_s3(data, bucket, prefix, filename):
     """
-    Salva JSON no S3 dentro da estrutura:
+    Salva JSON no S3 no formato:
 
-        s3://bucket/prefix/YYYYMM/timestamp_filename.json
+        s3://bucket/prefix/YYYYMM/filename
 
-    Exemplo:
-        s3://umane-datalake-bronze/monday/funil_originacao/202512/20251209_153210_raw.json
+    O timestamp deve vir dentro de `filename`, para manter consistência.
     """
 
     s3 = boto3.client("s3")
 
-    # Cria pasta no formato YYYYMM
     ano_mes = datetime.now().strftime("%Y%m")
 
-    # Usa timestamp para evitar sobrescrita
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    filename_final = f"{timestamp}_{filename}"
-
-    # Caminho final no S3 (não precisa existir previamente!)
-    # S3 cria automaticamente o prefixo
-    s3_key = f"{prefix}/{ano_mes}/{filename_final}"
+    # NÃO gerar timestamp aqui!
+    # Usar exatamente o filename enviado pelo pipeline.
+    s3_key = f"{prefix}/{ano_mes}/{filename}"
 
     s3.put_object(
         Bucket=bucket,
@@ -49,6 +42,7 @@ def salvar_json_s3(data, bucket, prefix, filename):
 
     return caminho_final
 
+
 # ============================================
 # FUNCTION PARA SALVAR ARQUIVO PARQUET NO S3 =
 # ============================================
@@ -58,10 +52,9 @@ def salvar_parquet_s3(df, bucket, prefix, filename):
     s3 = boto3.client("s3")
 
     ano_mes = datetime.now().strftime("%Y%m")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    filename_final = f"{timestamp}_{filename}"
-    s3_key = f"{prefix}/{ano_mes}/{filename_final}"
+    # NÃO adicione timestamp aqui!
+    s3_key = f"{prefix}/{ano_mes}/{filename}"
 
     # Converter para Parquet em memória
     table = pa.Table.from_pandas(df)

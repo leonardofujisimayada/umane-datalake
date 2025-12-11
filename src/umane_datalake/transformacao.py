@@ -16,13 +16,10 @@ import boto3
 # 1. Função principal: transforma todos os JSONs da camada bronze =
 # =================================================================
 
-def transformar_bronze_para_silver_s3(bucket_bronze: str, prefix_bronze: str):
+def transformar_bronze_para_silver_s3(bucket_bronze: str, prefix_bronze: str,
+                                      bucket_silver: str, prefix_silver: str):
     """
-    Lê todos os arquivos JSON da camada bronze no S3,
-    converte para DataFrame e retorna um único DataFrame consolidado.
-
-    Exemplo de prefix:
-        monday/funil_originacao
+    Processa apenas arquivos novos da camada bronze no S3 e salva a camada prata.
     """
 
     s3 = boto3.client("s3")
@@ -30,59 +27,108 @@ def transformar_bronze_para_silver_s3(bucket_bronze: str, prefix_bronze: str):
     # ------------------------------
     # 1. LISTAR ARQUIVOS DO BRONZE -
     # ------------------------------
-
-    # Pega o ano e mês atual (pasta corrente)
     ano_mes = datetime.now().strftime("%Y%m")
 
-    prefix_completo = f"{prefix_bronze}/{ano_mes}/"
-    print(f"➡ Procurando arquivos em: s3://{bucket_bronze}/{prefix_completo}")
+    bronze_prefix = f"{prefix_bronze}/{ano_mes}/"
+    silver_prefix = f"{prefix_silver}/{ano_mes}/"
 
-    response = s3.list_objects_v2(
+    print(f"➡ Procurando arquivos bronze em: s3://{bucket_bronze}/{bronze_prefix}")
+    print(f"➡ Procurando arquivos prata em:  s3://{bucket_silver}/{silver_prefix}")
+
+    # Bronze
+    bronze_resp = s3.list_objects_v2(
         Bucket=bucket_bronze,
-        Prefix=prefix_completo
+        Prefix=bronze_prefix
     )
 
-    if "Contents" not in response:
-        raise ValueError("Nenhum arquivo JSON encontrado na camada bronze do S3.")
+    if "Contents" not in bronze_resp:
+        print("⚠ Nenhum arquivo na camada bronze.")
+        return None
 
-    # Filtra somente .json
-    arquivos = [
-        obj["Key"]
-        for obj in response["Contents"]
+    bronze_files = [
+        obj["Key"] for obj in bronze_resp["Contents"]
         if obj["Key"].endswith(".json")
     ]
 
-    if not arquivos:
-        raise ValueError("Nenhum arquivo JSON encontrado na pasta bronze correspondente.")
+    # Prata
+    silver_resp = s3.list_objects_v2(
+        Bucket=bucket_silver,
+        Prefix=silver_prefix
+    )
 
-    print(f"➡ {len(arquivos)} arquivos encontrados na camada bronze do S3.")
+    silver_files = []
+    if "Contents" in silver_resp:
+        silver_files = [
+            obj["Key"] for obj in silver_resp["Contents"]
+            if obj["Key"].endswith(".parquet")
+        ]
 
-    # ----------------------------
-    # 2. PROCESSAR ARQUIVOS JSON -
-    # ----------------------------
+    # -----------------------
+    # 2. EXTRAIR TIMESTAMPS -
+    # -----------------------
+
+    def extrair_stamp_bronze(key):
+        # monday_raw_20251209_180427.json
+        return key.split("monday_raw_")[1].replace(".json", "")
+
+    def extrair_stamp_silver(key):
+        # monday_items_20251209_180427.parquet
+        return key.split("monday_items_")[1].replace(".parquet", "")
+
+    bronze_stamps = {extrair_stamp_bronze(k) for k in bronze_files}
+    silver_stamps = {extrair_stamp_silver(k) for k in silver_files}
+
+    # -------------------
+    # 3. ARQUIVOS NOVOS - 
+    # -------------------
+    novos = bronze_stamps - silver_stamps
+
+    print(f"➡ {len(novos)} arquivos novos encontrados.")
+
+    if not novos:
+        print("✔ Nenhum arquivo novo para processar.")
+        return None
+
+    # -----------------------
+    # 4. PROCESSAR ARQUIVOS -
+    # -----------------------
 
     dfs = []
 
-    for key in arquivos:
-        print(f"➡ Processando arquivo: s3://{bucket_bronze}/{key}")
+    for stamp in sorted(novos):
+        json_key = f"{bronze_prefix}monday_raw_{stamp}.json"
+        print(f"➡ Processando novo arquivo: s3://{bucket_bronze}/{json_key}")
 
-        obj = s3.get_object(Bucket=bucket_bronze, Key=key)
-
+        obj = s3.get_object(Bucket=bucket_bronze, Key=json_key)
         json_bytes = obj["Body"].read()
         json_data = json.loads(json_bytes.decode("utf-8"))
 
-        # Usa sua função atual para transformar JSON → DataFrame
         df = json_para_dataframe(json_data)
         dfs.append(df)
 
-    # -------------------------------
-    # 3. CONCATENAR EM UM ÚNICO DF
-    # -------------------------------
-    df_final = pd.concat(dfs, ignore_index=True)
+        # GERAR PRATA DO ARQUIVO
+        prata_key = f"{silver_prefix}monday_items_{stamp}.parquet"
+        print(f"➡ Salvando arquivo prata: s3://{bucket_silver}/{prata_key}")
 
-    print(f"✔ {len(df_final)} linhas totais consolidadas na camada silver.")
+        buffer = BytesIO()
+        df.to_parquet(buffer, index=False)
+        buffer.seek(0)
+
+        s3.put_object(
+            Bucket=bucket_silver,
+            Key=prata_key,
+            Body=buffer.getvalue(),
+            ContentType="application/octet-stream"
+        )
+
+    # -------------------
+    # 5. DF CONSOLIDADO -
+    # -------------------
+    df_final = pd.concat(dfs, ignore_index=True)
+    print(f"✔ Total consolidado da camada silver: {len(df_final)} linhas.")
 
     return df_final
+
 
 # =============================================================
 # 2. Detecta o tipo de JSON (lista de itens ou JSON completo) =

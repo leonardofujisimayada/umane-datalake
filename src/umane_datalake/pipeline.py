@@ -33,6 +33,9 @@ def run_pipeline():
     print("      🚀 INICIANDO PIPELINE      ")
     print("=================================")
 
+    # -------------------------------
+    # CONFIGURAÇÕES DO BOARD MONDAY -
+    # -------------------------------
     board_id = 9718729717
     print(f"➡ Extraindo dados do board {board_id}...")
 
@@ -48,11 +51,11 @@ def run_pipeline():
 
     print("✔ Dados extraídos com sucesso.")
 
-    # --------------------------------------
-    # 1.1 SALVAR BRONZE NO S3 (JSON bruto) -
-    # --------------------------------------
-
-    bronze_filename = "monday_raw.json"
+    # ---------------------------------------------
+    # 1.1 SALVAR BRONZE NO S3 COM TIMESTAMP ÚNICO -
+    # ---------------------------------------------
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    bronze_filename = f"monday_raw_{timestamp}.json"
 
     print("➡ Salvando JSON bruto na camada bronze S3...")
 
@@ -69,61 +72,47 @@ def run_pipeline():
 
     print(f"✔ Arquivo salvo na camada bronze: {caminho_bronze}")
 
-    # ------------------------------------
-    # 2. TRANSFORMAÇÃO — Bronze → Silver -
-    # ------------------------------------
+    # ------------------------------------------------
+    # 2. TRANSFORMAÇÃO INCREMENTAL — BRONZE → SILVER -
+    # ------------------------------------------------
 
-    print("➡ Iniciando transformação (bronze → silver)...")
+    print("➡ Iniciando transformação incremental (bronze → silver)...")
 
     try:
-        df_silver = transformar_bronze_para_silver_s3(
+        df_silver_novos = transformar_bronze_para_silver_s3(
             bucket_bronze=BUCKET_BRONZE,
-            prefix_bronze=PREFIX_BRONZE
+            prefix_bronze=PREFIX_BRONZE,
+            bucket_silver=BUCKET_PRATA,
+            prefix_silver=PREFIX_PRATA
         )
     except Exception as e:
         print("❌ ERRO durante a transformação bronze → silver:")
         raise e
 
-    print("✔ Dados transformados para silver.")
+    if df_silver_novos is None:
+        print("✔ Nenhum novo dado silver gerado. Encerrando pipeline.")
+        return
 
-    # -----------------------------------
-    # 2.1 SALVAR SILVER NO S3 (PARQUET) -
-    # -----------------------------------
+    print("✔ Novos dados silver gerados.")
 
-    silver_filename = "monday_silver.parquet"
+    # ----------------------------------------------
+    # 3. TRANSFORMAÇÃO INCREMENTAL — SILVER → GOLD -
+    # ----------------------------------------------
 
-    try:
-        caminho_silver = salvar_parquet_s3(
-            df=df_silver,
-            bucket=BUCKET_PRATA,
-            prefix=PREFIX_PRATA,
-            filename=silver_filename
-        )
-    except Exception as e:
-        print("❌ ERRO ao salvar parquet na camada prata:")
-        raise e
-
-    print(f"✔ Silver salvo com sucesso: {caminho_silver}")
-
-    # ----------------------------------
-    # 3. TRANSFORMAÇÃO — Silver → Gold -
-    # ----------------------------------
-
-    print("➡ Iniciando transformação (silver → gold)...")
+    print("➡ Iniciando transformação incremental (silver → gold)...")
 
     try:
-        df_gold = criar_camada_ouro(df_silver)
+        df_gold = criar_camada_ouro(df_silver_novos)
     except Exception as e:
         print("❌ ERRO na criação da camada ouro:")
         raise e
 
-    print("✔ Dados prontos para consumo final (gold).")
+    print("✔ Dados gold gerados.")
 
-    # ---------------------------------
-    # 3.1 SALVAR GOLD NO S3 (PARQUET) -
-    # ---------------------------------
-
-    gold_filename = "monday_gold.parquet"
+    # -----------------------------------------------
+    # 3.1 SALVAR GOLD NO S3 (PARQUET COM TIMESTAMP) -
+    # -----------------------------------------------
+    gold_filename = f"monday_gold_{timestamp}.parquet"
 
     try:
         caminho_gold = salvar_parquet_s3(
@@ -141,6 +130,7 @@ def run_pipeline():
     print("=======================================")
     print("     🎉 PIPELINE EXECUTADO SEM ERROS    ")
     print("=======================================")
+
 
 
 # =================
