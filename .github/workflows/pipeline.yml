@@ -29,11 +29,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: "us-east-1"
         run: |
-          # Adicionar diretório src ao PYTHONPATH
           export PYTHONPATH="$PYTHONPATH:src"
-          
-          # Executar pipeline
-          python - <<EOF
+          python - << 'EOF'
 from umane_datalake.pipeline import run_pipeline
 run_pipeline()
 EOF
+
