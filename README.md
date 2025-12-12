@@ -2,17 +2,19 @@
 
 ## 🚀 Visão Geral
 
-Este repositório implementa um pipeline completo para ingestão, tratamento e organização de dados da plataforma **Monday.com** em um **Data Lake AWS** estruturado em três camadas:
+Este repositório implementa um **pipeline de dados completo e incremental** para ingestão, tratamento e organização de dados da plataforma **Monday.com** em um **Data Lake na AWS (S3)**, estruturado em três camadas clássicas:
 
-- **Bronze** → dados brutos (JSON)
-- **Silver** → dados normalizados e flatten (Parquet)
-- **Gold** → dataset analítico padronizado, pronto para BI e análises
+- **Bronze** → dados brutos extraídos da API (JSON)
+- **Silver** → dados normalizados e tabulares (Parquet)
+- **Gold** → datasets analíticos curados, prontos para BI e análises
 
-Arquitetura:
+Arquitetura lógica:
 
 ```
-Monday API → Bronze (S3) → Silver (S3) → Gold (S3) → Analytics
+Monday API → Bronze (S3) → Silver (S3) → Gold (S3) → Analytics / BI
 ```
+
+O pipeline suporta **múltiplos boards do Monday**, mantendo rastreabilidade, incrementalidade e chaves estáveis para integração entre tabelas.
 
 ---
 
@@ -21,17 +23,21 @@ Monday API → Bronze (S3) → Silver (S3) → Gold (S3) → Analytics
 ```
 umane-datalake/
 │
-├── src/umane_datalake/
-│   ├── config.py               # Carrega variáveis de ambiente e constantes (buckets, tokens, etc.)
-│   ├── monday_client.py        # Cliente GraphQL da Monday (extração de itens, colunas, paginação)
-│   ├── s3_client.py            # Funções utilitárias para upload/download no AWS S3
-│   ├── transformacao.py        # Bronze → Silver (flatten, limpeza, parquet)
-│   ├── transformacao_ouro.py   # Silver → Gold (padronização, curadoria, novas chaves)
-│   ├── pipeline.py             # Orquestrador principal do pipeline
-│
-├── requirements.txt
+├── pyproject.toml              # Configuração de build e dependências
 ├── README.md
-└── LICENSE
+├── LICENSE
+│
+├── src/
+│   └── umane_datalake/
+│       ├── __init__.py
+│       ├── config.py               # Variáveis de ambiente e configurações globais
+│       ├── monday_client.py        # Cliente GraphQL da Monday (extração + paginação)
+│       ├── s3_client.py            # Utilitários de leitura/escrita no S3
+│       ├── transformacao.py        # Bronze → Silver (flatten, normalização)
+│       ├── transformacao_ouro.py   # Silver → Gold (curadoria, chaves estáveis)
+│       └── pipeline.py             # Orquestrador principal do pipeline
+│
+└── venv/                       # Ambiente virtual (não versionado)
 ```
 
 ---
@@ -39,74 +45,112 @@ umane-datalake/
 ## 🧠 Principais Funcionalidades
 
 ### 🔹 1. Extração da API Monday (GraphQL)
-- Leitura de boards e itens
-- Paginação automática
-- Suporte a colunas simples e complexas (mirror, text, numbers, etc.)
-- Salvamento dos dados brutos na camada Bronze (JSON)
+- Leitura de múltiplos boards
+- Paginação automática (`items_page`)
+- Suporte a colunas simples e complexas (mirror, relations, subtasks)
+- Salvamento dos dados brutos na camada **Bronze (JSON)**
+
+---
 
 ### 🔹 2. Bronze → Silver
 Executado via `transformacao.py`:
-- Detecta automaticamente o formato do JSON
-- Faz flatten das colunas
-- Normaliza tipos
-- Concatena múltiplos arquivos
-- Salva em formato **Parquet**, otimizado para análises
+
+- Processamento **incremental** (por timestamp)
+- Conversão automática de JSON para DataFrame
+- Flatten das colunas do Monday
+- Prevenção de duplicidade de nomes
+- Inclusão da coluna de rastreabilidade `board_origem`
+- Salvamento em **Parquet** (otimizado para analytics)
+
+---
 
 ### 🔹 3. Silver → Gold
 Executado via `transformacao_ouro.py`:
-- Padronização de nomes de colunas
-- Criação de IDs independentes da plataforma Monday
-- Somatório e agregações em campos numéricos
-- Salvamento da camada ouro em S3
+
+- Normalização de nomes de colunas (snake_case, sem acentos)
+- Criação de **chave de negócio do projeto**
+- Geração de **`id_projeto` estável (UUID5)** para JOIN entre boards
+- Conversão de campos monetários concatenados (`"10 | 20"`)
+- Dataset final pronto para BI, SQL e dashboards
 
 ---
 
 ## 🔧 Como Executar o Pipeline
 
 ### 1️⃣ Criar e ativar um ambiente virtual (PowerShell)
+
 ```powershell
 python -m venv venv
 venv\Scripts\Activate.ps1
 ```
 
-### 2️⃣ Instalar dependências
+---
+
+### 2️⃣ Instalar o projeto (modo editable)
+
+> O projeto utiliza `pyproject.toml`
+
 ```powershell
-pip install -r requirements.txt
+pip install -e .
 ```
 
-### 3️⃣ Exportar variáveis de ambiente
+---
+
+### 3️⃣ Configurar variáveis de ambiente
+
 ```powershell
-setx MONDAY_API_KEY "seu_token_aqui"
+setx MONDAY_API_TOKEN "seu_token_aqui"
 setx AWS_ACCESS_KEY_ID "xxxxx"
 setx AWS_SECRET_ACCESS_KEY "xxxxx"
 setx AWS_DEFAULT_REGION "xxxxx"
 ```
 
-### 4️⃣ Executar o pipeline
-```powershell
-python -m src.umane_datalake.pipeline
-```
+---
 
-Isso irá:
-1. Extrair dados da Monday
-2. Criar arquivos Bronze → Silver → Gold automaticamente no S3
+### 4️⃣ Executar o pipeline
+
+```powershell
+python -m umane_datalake.pipeline
+```
 
 ---
 
-## ☁ Configuração do S3 (Data Lake)
+## 🗂️ Boards Suportados
 
-Os buckets esperados são:
+| Nome lógico | Board ID |
+|------------|----------|
+| funil_originacao | 9718729717 |
+| projeto_monday | 18042281125 |
+
+---
+
+## ☁ Estrutura do Data Lake no S3
 
 ```
-umane-datalake-bronze/
-    monday/{board}/{YYYYMM}/{arquivo.json}
+s3://umane-datalake-bronze/
+└── monday/{board}/YYYYMM/monday_raw_*.json
 
-umane-datalake-prata/
-    monday/{board}/{YYYYMM}/{arquivo.parquet}
+s3://umane-datalake-prata/
+└── monday/{board}/YYYYMM/monday_items_*.parquet
 
-umane-datalake-ouro/
-    monday/{board}/{YYYYMM}/{arquivo_gold.parquet}
+s3://umane-datalake-ouro/
+└── monday/{board}/YYYYMM/monday_gold_*.parquet
 ```
+
+---
+
+## 🔗 Integração entre Boards (JOIN)
+
+A camada Gold gera a coluna **`id_projeto`**, um identificador estável e determinístico, permitindo JOIN entre diferentes boards e integração com novas fontes no futuro.
+
+---
+
+## ✅ Status do Projeto
+
+- Pipeline incremental funcional
+- Multi-board
+- Data Lake Bronze / Silver / Gold
+- Pronto para BI e Analytics
 
 ---
 
