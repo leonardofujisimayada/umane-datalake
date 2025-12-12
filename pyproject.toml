@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "umane-datalake"
+version = "0.1.0"
+description = "Data Lake Monday → AWS S3 (Bronze, Prata, Ouro)"
+authors = [
+  { name = "Leonardo Fujisima Yada" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+  "boto3",
+  "pandas",
+  "pyarrow",
+  "requests",
+  "python-dotenv",
+  "unidecode",
+  "s3fs"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

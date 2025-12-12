@@ -1,29 +1,31 @@
 """
 Criação da camada Ouro do Data Lake Monday.
 
-A camada Ouro possui:
+Características da camada Ouro:
 - Colunas normalizadas (snake_case, sem acentos)
-- Tratamento de valores monetários concatenados por pipe ("10 | 20")
-- Geração de ID estável baseado no nome do item
-- Dataset pronto para análises e BI
-
-Função principal:
-    criar_camada_ouro(df)
+- Conversão de colunas monetárias com valores concatenados por pipe
+- Geração de ID_PROJETO estável (UUID5) para JOIN entre boards
+- Preservação da coluna board_origem
+- Dataset pronto para BI, analytics e modelagem estrela
 """
 
 import uuid
-import unidecode
 import re
 import pandas as pd
+import unidecode
 
 
-def normalizar_nome_coluna(nome):
+# =========================================================
+# Utilidades
+# =========================================================
+
+def normalizar_nome_coluna(nome: str) -> str:
     """
-    Converte o nome da coluna para formato padrão:
-        - remove acentos
-        - lowercase
-        - substitui caracteres especiais por "_"
-        - remove duplicidade de underscore
+    Normaliza nomes de colunas para padrão data lake:
+    - remove acentos
+    - lowercase
+    - substitui caracteres especiais por "_"
+    - remove underscores duplicados
     """
     nome = unidecode.unidecode(nome)
     nome = nome.lower()
@@ -32,79 +34,99 @@ def normalizar_nome_coluna(nome):
     return nome.strip("_")
 
 
-def somar_coluna_pipe(x):
+def somar_coluna_pipe(valor):
     """
-    Converte colunas do tipo:
+    Converte strings no formato:
         "10 | 20 | 30"
-    em valores numéricos somados.
+    em valor numérico somado.
 
-    Args:
-        x (str): String contendo números separados por pipe.
-
-    Returns:
-        float: Soma dos valores convertidos.
+    Retorna 0 para NaN ou strings vazias.
     """
-    if pd.isna(x):
-        return 0
+    if pd.isna(valor):
+        return 0.0
 
-    valores = x.split("|")
-    total = 0
+    total = 0.0
+    partes = str(valor).split("|")
 
-    for v in valores:
-        v = v.strip()
-        if not v:
+    for p in partes:
+        p = p.strip()
+        if not p:
             continue
 
-        # Remove separador de milhares e converte vírgula decimal para ponto
-        v = v.replace(".", "").replace(",", ".")
+        # Remove separador de milhar e ajusta decimal
+        p = p.replace(".", "").replace(",", ".")
 
         try:
-            total += float(v)
-        except:
-            pass
+            total += float(p)
+        except ValueError:
+            continue
 
     return total
 
 
-def gerar_id_estavel(texto):
+def gerar_id_estavel(texto: str) -> str:
     """
-    Gera um UUID previsível (UUID5) a partir do nome do item.
+    Gera um UUID determinístico (UUID5) a partir de um texto.
 
-    Args:
-        texto (str): Nome do item.
-
-    Returns:
-        str: UUID estável.
+    A mesma entrada sempre produzirá o mesmo ID.
     """
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, texto.lower().strip()))
+    if pd.isna(texto):
+        return None
+
+    texto = str(texto).lower().strip()
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, texto))
 
 
-def criar_camada_ouro(df):
+def obter_chave_projeto(df: pd.DataFrame) -> pd.Series:
     """
-    Aplica todas as transformações finais para o dataset Ouro.
+    Define a melhor chave de negócio para o projeto.
+
+    Prioridade:
+    1. codigo_projeto (se existir)
+    2. item_name
+    """
+    if "codigo_projeto" in df.columns:
+        return df["codigo_projeto"].fillna(df["item_name"])
+
+    return df["item_name"]
+
+
+# =========================================================
+# Função principal: Prata → Ouro
+# =========================================================
+
+def criar_camada_ouro(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aplica as transformações finais para a camada Ouro.
 
     Transformações:
-        - Criação de ID estável
-        - Normalização de nomes de colunas
-        - Conversão e soma de colunas monetárias
-        - Retorno do DataFrame pronto para análises
-
-    Args:
-        df (pd.DataFrame): DataFrame já transformado na camada Prata.
-
-    Returns:
-        pd.DataFrame: DataFrame final da camada Ouro.
+    - Criação da chave de projeto
+    - Geração do ID_PROJETO estável
+    - Normalização de nomes das colunas
+    - Conversão de colunas monetárias
+    - Preservação de board_origem
     """
 
     df = df.copy()
 
-    # ID único baseado no nome
-    df["id_projeto"] = df["item_name"].apply(gerar_id_estavel)
+    # -----------------------------
+    # Chave de negócio do projeto
+    # -----------------------------
+    df["chave_projeto"] = obter_chave_projeto(df)
 
+    # -----------------------------
+    # ID_PROJETO estável (JOIN)
+    # -----------------------------
+    df["id_projeto"] = df["chave_projeto"].apply(gerar_id_estavel)
+
+    # -----------------------------
     # Normalizar nomes das colunas
+    # -----------------------------
     df.columns = [normalizar_nome_coluna(c) for c in df.columns]
 
-    # Colunas numéricas representadas como pipe-separated
+    # -----------------------------
+    # Colunas monetárias com pipe
+    # -----------------------------
     colunas_soma = [
         "valor_total_do_orcamento",
         "valor_total_da_avaliacao",
@@ -116,4 +138,3 @@ def criar_camada_ouro(df):
             df[col] = df[col].apply(somar_coluna_pipe)
 
     return df
-
