@@ -54,7 +54,7 @@ Executado via `transformacao.py`:
 
 ### 🔹 3. Silver → Gold
 Executado via `transformacao_ouro.py`:
-- Padronização profissional de nomes de colunas
+- Padronização de nomes de colunas
 - Criação de IDs independentes da plataforma Monday
 - Somatório e agregações em campos numéricos
 - Salvamento da camada ouro em S3
@@ -79,7 +79,7 @@ pip install -r requirements.txt
 setx MONDAY_API_KEY "seu_token_aqui"
 setx AWS_ACCESS_KEY_ID "xxxxx"
 setx AWS_SECRET_ACCESS_KEY "xxxxx"
-setx AWS_DEFAULT_REGION "us-east-2"
+setx AWS_DEFAULT_REGION "xxxxx"
 ```
 
 ### 4️⃣ Executar o pipeline
